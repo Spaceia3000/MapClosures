@@ -85,7 +85,7 @@ void MapClosures::MatchAndAddToDatabase(const int id,
     hbst_matchable.reserve(orb_descriptors.rows);
     std::for_each(
         self_matches.cbegin(), self_matches.cend(), [&](const std::vector<cv::DMatch> &self_match) {
-            if (self_match[1].distance > self_similarity_threshold) {
+            if (self_match.size() >= 2 && self_match[1].distance > self_similarity_threshold) {
                 const int index_descriptor = self_match[0].queryIdx;
                 cv::KeyPoint keypoint = orb_keypoints[index_descriptor];
                 keypoint.pt.x = keypoint.pt.x + static_cast<float>(density_map.lower_bound.y());
@@ -121,7 +121,7 @@ void MapClosures::Match(const std::vector<Eigen::Vector3d> &local_map) {
     hbst_matchable.reserve(orb_descriptors.rows);
     std::for_each(
         self_matches.cbegin(), self_matches.cend(), [&](const std::vector<cv::DMatch> &self_match) {
-            if (self_match[1].distance > self_similarity_threshold) {
+            if (self_match.size() >= 2 && self_match[1].distance > self_similarity_threshold) {
                 const int index_descriptor = self_match[0].queryIdx;
                 cv::KeyPoint keypoint = orb_keypoints[index_descriptor];
                 keypoint.pt.x = keypoint.pt.x + static_cast<float>(density_map.lower_bound.y());
