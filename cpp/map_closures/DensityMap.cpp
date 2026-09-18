@@ -83,8 +83,9 @@ DensityMap GenerateDensityMap(const std::vector<Eigen::Vector3d> &pcd,
     });
 
     DensityMap density_map(n_rows, n_cols, density_map_resolution, lower_bound_coordinates);
+    const double density_range = max_points - min_points;
     counting_grid.forEach<double>([&](const double count, const int pos[]) {
-        double density = (count - min_points) / (max_points - min_points);
+        double density = density_range > 0.0 ? (count - min_points) / density_range : 0.0;
         density = density > density_threshold ? density : 0.0;
         density_map(pos[0], pos[1]) = static_cast<uint8_t>(255 * density);
     });
