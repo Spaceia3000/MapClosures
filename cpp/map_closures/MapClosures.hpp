@@ -53,6 +53,21 @@ struct ClosureCandidate {
     std::size_t number_of_inliers = 0;
 };
 
+struct QueryDiagnostics {
+    int query_id = -1;
+    std::size_t orb_descriptors = 0;
+    std::size_t retained_descriptors = 0;
+    std::size_t database_references = 0;
+    std::size_t retrieved_references = 0;
+    std::size_t eligible_references = 0;
+    std::size_t references_with_enough_matches = 0;
+    std::size_t references_with_enough_inliers = 0;
+    std::size_t maximum_matches = 0;
+    int best_match_reference_id = -1;
+    std::size_t maximum_inliers = 0;
+    int best_inlier_reference_id = -1;
+};
+
 class MapClosures {
 public:
     explicit MapClosures();
@@ -83,6 +98,10 @@ public:
         return ground_alignments_.at(map_id);
     }
 
+    const QueryDiagnostics &GetLastQueryDiagnostics() const {
+        return last_query_diagnostics_;
+    }
+
     void SaveHbstDatabase(const std::string &database_path) const {
         hbst_binary_tree_->write(database_path);
     }
@@ -93,6 +112,7 @@ protected:
     ClosureCandidate ValidateClosure(const int reference_id, const int query_id) const;
 
     Config config_;
+    QueryDiagnostics last_query_diagnostics_;
     Tree::MatchVectorMap descriptor_matches_;
     std::unordered_map<int, DensityMap> density_maps_;
     std::unordered_map<int, Eigen::Matrix4d> ground_alignments_;

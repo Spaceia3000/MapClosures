@@ -7,8 +7,13 @@
 #include <vector>
 
 #include "map_closures/AlignRansac2D.hpp"
+#include "map_closures/MapClosures.hpp"
 
 namespace {
+class MapClosuresProbe final : public map_closures::MapClosures {
+public:
+    void SeedStaleMatches() { descriptor_matches_.emplace(42, Tree::MatchVector{}); }
+};
 int failures = 0;
 
 void Check(const bool condition, const std::string &message) {
@@ -67,12 +72,33 @@ void TestInsufficientInputIsExplicit() {
     Check(transform.matrix().isApprox(Eigen::Matrix3d::Identity()),
           "insufficient input must return identity");
 }
+
+void TestDescriptorlessQueryClearsStaleMatches() {
+    std::vector<Eigen::Vector3d> uniform_grid;
+    for (int x = 0; x <= 40; ++x) {
+        for (int y = 0; y <= 40; ++y) {
+            uniform_grid.emplace_back(0.5 * x, 0.5 * y, 0.0);
+        }
+    }
+
+    MapClosuresProbe detector;
+    detector.SeedStaleMatches();
+    const auto closures = detector.GetClosures(0, uniform_grid);
+    const auto &diagnostics = detector.GetLastQueryDiagnostics();
+    Check(closures.empty(), "descriptorless query must not produce a closure");
+    Check(diagnostics.query_id == 0, "diagnostics must identify the current query");
+    Check(diagnostics.retained_descriptors == 0U,
+          "uniform density map must retain no ORB descriptors");
+    Check(diagnostics.database_references == 0U,
+          "descriptorless query must clear matches from the previous query");
+}
 }  // namespace
 
 int main() {
     TestMinimalSetProducesProperRotation();
     TestDeterministicWithOutliers();
     TestInsufficientInputIsExplicit();
+    TestDescriptorlessQueryClearsStaleMatches();
     if (failures != 0) {
         std::cerr << failures << " assertion(s) failed\n";
         return 1;

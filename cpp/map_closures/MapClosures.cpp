@@ -76,6 +76,10 @@ void MapClosures::MatchAndAddToDatabase(const int id,
     orb_keypoints.reserve(nfeatures);
     orb_extractor_->detectAndCompute(density_map.grid, cv::noArray(), orb_keypoints,
                                      orb_descriptors);
+    last_query_diagnostics_ = QueryDiagnostics{};
+    last_query_diagnostics_.query_id = id;
+    last_query_diagnostics_.orb_descriptors =
+        static_cast<std::size_t>(orb_descriptors.rows);
 
     std::vector<std::vector<cv::DMatch>> self_matches;
     self_matches.reserve(orb_keypoints.size());
@@ -95,6 +99,8 @@ void MapClosures::MatchAndAddToDatabase(const int id,
             }
         });
 
+    last_query_diagnostics_.retained_descriptors = hbst_matchable.size();
+    descriptor_matches_.clear();
     hbst_binary_tree_->matchAndAdd(hbst_matchable, descriptor_matches_,
                                    config_.hamming_distance_threshold,
                                    srrg_hbst::SplittingStrategy::SplitEven);
@@ -130,6 +136,7 @@ void MapClosures::Match(const std::vector<Eigen::Vector3d> &local_map) {
                     new Matchable(keypoint, orb_descriptors.row(index_descriptor)));
             }
         });
+    descriptor_matches_.clear();
     hbst_binary_tree_->match(hbst_matchable, descriptor_matches_,
                              config_.hamming_distance_threshold);
 }
@@ -174,13 +181,37 @@ std::vector<ClosureCandidate> MapClosures::GetTopKClosures(
         return a.number_of_inliers > b.number_of_inliers;
     };
 
+    last_query_diagnostics_.database_references = descriptor_matches_.size();
+    last_query_diagnostics_.retrieved_references =
+        static_cast<std::size_t>(std::count_if(
+            descriptor_matches_.cbegin(), descriptor_matches_.cend(),
+            [](const auto &entry) { return !entry.second.empty(); }));
+
     std::vector<ClosureCandidate> closures;
     const int num_of_potential_closures = query_id - no_of_local_maps_to_skip;
     if (num_of_potential_closures > 0) {
+        last_query_diagnostics_.eligible_references =
+            static_cast<std::size_t>(num_of_potential_closures);
         closures.reserve(num_of_potential_closures);
         for (int ref_id = 0; ref_id < num_of_potential_closures; ++ref_id) {
+            const auto matches_it = descriptor_matches_.find(ref_id);
+            const std::size_t number_of_matches =
+                matches_it == descriptor_matches_.end() ? 0U : matches_it->second.size();
+            if (number_of_matches > last_query_diagnostics_.maximum_matches) {
+                last_query_diagnostics_.maximum_matches = number_of_matches;
+                last_query_diagnostics_.best_match_reference_id = ref_id;
+            }
+            if (number_of_matches > min_no_of_matches) {
+                ++last_query_diagnostics_.references_with_enough_matches;
+            }
+
             ClosureCandidate closure = ValidateClosure(ref_id, query_id);
+            if (closure.number_of_inliers > last_query_diagnostics_.maximum_inliers) {
+                last_query_diagnostics_.maximum_inliers = closure.number_of_inliers;
+                last_query_diagnostics_.best_inlier_reference_id = ref_id;
+            }
             if (closure.number_of_inliers > min_no_of_matches) {
+                ++last_query_diagnostics_.references_with_enough_inliers;
                 closures.emplace_back(std::move(closure));
             }
         }
