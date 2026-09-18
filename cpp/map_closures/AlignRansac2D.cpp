@@ -49,11 +49,14 @@ Eigen::Isometry2d KabschUmeyamaAlignment2D(
 
     const Eigen::JacobiSVD<Eigen::Matrix2d> svd(covariance_matrix,
                                                 Eigen::ComputeFullU | Eigen::ComputeFullV);
-    Eigen::Isometry2d T = Eigen::Isometry2d::Identity();
-    const Eigen::Matrix2d R = svd.matrixV() * svd.matrixU().transpose();
-    T.linear() = R.determinant() > 0 ? R : -R;
-    T.translation() = mean.query - R * mean.ref;
+    Eigen::Matrix2d handedness = Eigen::Matrix2d::Identity();
+    const Eigen::Matrix2d unconstrained_rotation =
+        svd.matrixV() * svd.matrixU().transpose();
+    handedness(1, 1) = unconstrained_rotation.determinant() < 0.0 ? -1.0 : 1.0;
 
+    Eigen::Isometry2d T = Eigen::Isometry2d::Identity();
+    T.linear() = svd.matrixV() * handedness * svd.matrixU().transpose();
+    T.translation() = mean.query - T.linear() * mean.ref;
     return T;
 }
 
@@ -65,6 +68,7 @@ constexpr double sq_inliers_distance_threshold =
 constexpr double inliers_ratio = 0.1;
 constexpr double probability_success = 0.999;
 constexpr int min_points = 2;
+constexpr std::mt19937::result_type kRansacSeed = 0x4D434C43U;
 const int kRansacTrials = std::ceil(std::log(1.0 - probability_success) /
                                     std::log(1.0 - std::pow(inliers_ratio, min_points)));
 }  // namespace
@@ -75,7 +79,11 @@ PointPair::PointPair(const Eigen::Vector2d &r, const Eigen::Vector2d &q) : ref(r
 
 std::pair<Eigen::Isometry2d, std::size_t> RansacAlignment2D(
     const std::vector<PointPair> &keypoint_pairs) {
+    if (keypoint_pairs.size() < min_points) {
+        return {Eigen::Isometry2d::Identity(), 0U};
+    }
     const size_t max_inliers = keypoint_pairs.size();
+    std::mt19937 generator{kRansacSeed};
 
     std::vector<PointPair> sample_keypoint_pairs(min_points);
     std::vector<int> inlier_indices;
@@ -89,7 +97,7 @@ std::pair<Eigen::Isometry2d, std::size_t> RansacAlignment2D(
         inlier_indices.clear();
 
         std::sample(keypoint_pairs.begin(), keypoint_pairs.end(), sample_keypoint_pairs.begin(),
-                    min_points, std::mt19937{std::random_device{}()});
+                    min_points, generator);
         const Eigen::Isometry2d T = KabschUmeyamaAlignment2D(sample_keypoint_pairs);
 
         int index = 0;

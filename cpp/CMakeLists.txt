@@ -23,6 +23,8 @@
 cmake_minimum_required(VERSION 3.16...3.26)
 project(map_closures_cpp VERSION 2.1.0 LANGUAGES CXX)
 
+include(CTest)
+
 option(USE_SYSTEM_EIGEN3 "Use system pre-installed Eigen" ON)
 option(USE_SYSTEM_OPENCV "Use system pre-installed OpenCV" ON)
 
@@ -34,3 +36,7 @@ include(3rdparty/find_dependencies.cmake)
 include(cmake/CompilerOptions.cmake)
 
 add_subdirectory(map_closures)
+
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()

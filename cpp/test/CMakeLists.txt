@@ -1,0 +1,3 @@
+add_executable(map_closures_ransac_test AlignRansac2DTest.cpp)
+target_link_libraries(map_closures_ransac_test PRIVATE map_closures)
+add_test(NAME map_closures_ransac_test COMMAND map_closures_ransac_test)
