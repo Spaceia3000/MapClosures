@@ -73,6 +73,31 @@ void TestInsufficientInputIsExplicit() {
           "insufficient input must return identity");
 }
 
+void TestReferenceDiagnosticsCoverEveryEligibleReference() {
+    std::vector<Eigen::Vector3d> uniform_grid;
+    for (int x = 0; x <= 40; ++x) {
+        for (int y = 0; y <= 40; ++y) {
+            uniform_grid.emplace_back(0.5 * x, 0.5 * y, 0.0);
+        }
+    }
+
+    map_closures::MapClosures detector;
+    for (int query_id = 0; query_id <= 4; ++query_id) {
+        (void)detector.GetClosures(query_id, uniform_grid);
+    }
+    const auto &references = detector.GetLastReferenceDiagnostics();
+    Check(references.size() == 1U,
+          "query four must expose its complete eligible-reference population");
+    if (!references.empty()) {
+        Check(references.front().reference_id == 0 && references.front().query_id == 4,
+              "per-reference diagnostics must preserve reference/query IDs");
+        Check(references.front().number_of_matches == 0U &&
+              references.front().number_of_inliers == 0U &&
+              !references.front().has_pose,
+              "descriptorless references remain visible as negative retrieval evidence");
+    }
+}
+
 void TestDescriptorlessQueryClearsStaleMatches() {
     std::vector<Eigen::Vector3d> uniform_grid;
     for (int x = 0; x <= 40; ++x) {
@@ -98,6 +123,7 @@ int main() {
     TestMinimalSetProducesProperRotation();
     TestDeterministicWithOutliers();
     TestInsufficientInputIsExplicit();
+    TestReferenceDiagnosticsCoverEveryEligibleReference();
     TestDescriptorlessQueryClearsStaleMatches();
     if (failures != 0) {
         std::cerr << failures << " assertion(s) failed\n";

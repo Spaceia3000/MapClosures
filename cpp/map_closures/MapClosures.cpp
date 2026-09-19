@@ -77,6 +77,7 @@ void MapClosures::MatchAndAddToDatabase(const int id,
     orb_extractor_->detectAndCompute(density_map.grid, cv::noArray(), orb_keypoints,
                                      orb_descriptors);
     last_query_diagnostics_ = QueryDiagnostics{};
+    last_reference_diagnostics_.clear();
     last_query_diagnostics_.query_id = id;
     last_query_diagnostics_.orb_descriptors =
         static_cast<std::size_t>(orb_descriptors.rows);
@@ -206,6 +207,17 @@ std::vector<ClosureCandidate> MapClosures::GetTopKClosures(
             }
 
             ClosureCandidate closure = ValidateClosure(ref_id, query_id);
+            ReferenceDiagnostics reference_diagnostics;
+            reference_diagnostics.reference_id = ref_id;
+            reference_diagnostics.query_id = query_id;
+            reference_diagnostics.number_of_matches = number_of_matches;
+            reference_diagnostics.number_of_inliers = closure.number_of_inliers;
+            reference_diagnostics.has_pose =
+                closure.source_id == ref_id && closure.target_id == query_id;
+            if (reference_diagnostics.has_pose) {
+                reference_diagnostics.pose = closure.pose;
+            }
+            last_reference_diagnostics_.emplace_back(std::move(reference_diagnostics));
             if (closure.number_of_inliers > last_query_diagnostics_.maximum_inliers) {
                 last_query_diagnostics_.maximum_inliers = closure.number_of_inliers;
                 last_query_diagnostics_.best_inlier_reference_id = ref_id;

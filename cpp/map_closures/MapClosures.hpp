@@ -68,6 +68,15 @@ struct QueryDiagnostics {
     int best_inlier_reference_id = -1;
 };
 
+struct ReferenceDiagnostics {
+    int reference_id = -1;
+    int query_id = -1;
+    std::size_t number_of_matches = 0;
+    std::size_t number_of_inliers = 0;
+    bool has_pose = false;
+    Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+};
+
 class MapClosures {
 public:
     explicit MapClosures();
@@ -102,6 +111,10 @@ public:
         return last_query_diagnostics_;
     }
 
+    const std::vector<ReferenceDiagnostics> &GetLastReferenceDiagnostics() const {
+        return last_reference_diagnostics_;
+    }
+
     void SaveHbstDatabase(const std::string &database_path) const {
         hbst_binary_tree_->write(database_path);
     }
@@ -113,6 +126,7 @@ protected:
 
     Config config_;
     QueryDiagnostics last_query_diagnostics_;
+    std::vector<ReferenceDiagnostics> last_reference_diagnostics_;
     Tree::MatchVectorMap descriptor_matches_;
     std::unordered_map<int, DensityMap> density_maps_;
     std::unordered_map<int, Eigen::Matrix4d> ground_alignments_;
