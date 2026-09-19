@@ -98,6 +98,104 @@ void TestReferenceDiagnosticsCoverEveryEligibleReference() {
     }
 }
 
+
+std::vector<Eigen::Vector3d> StructuredClosureFixture() {
+    constexpr int side = 128;
+    constexpr double cell = 0.5;
+    constexpr double center = (static_cast<double>(side) - 1.0) / 2.0;
+    const Eigen::Vector2d offsets[] = {
+        {-0.15, -0.15}, {0.15, -0.15},
+        {-0.15, 0.15}, {0.15, 0.15}};
+    std::vector<Eigen::Vector3d> points;
+    points.reserve(42000U);
+    for (int row = 0; row < side; ++row) {
+        for (int column = 0; column < side; ++column) {
+            std::uint32_t hash =
+                static_cast<std::uint32_t>(row) * 0x9e3779b1U ^
+                static_cast<std::uint32_t>(column) * 0x85ebca6bU;
+            hash ^= hash >> 16U;
+            hash *= 0x7feb352dU;
+            hash ^= hash >> 15U;
+            const int count = 1 + static_cast<int>(hash & 3U);
+            const double x =
+                (static_cast<double>(column) - center) * cell;
+            const double y =
+                (static_cast<double>(row) - center) * cell;
+            const double z = 0.01 * static_cast<double>(
+                (row * 17 + column * 31) % 11);
+            for (int index = 0; index < count; ++index) {
+                points.emplace_back(
+                    x + offsets[index].x(),
+                    y + offsets[index].y(),
+                    z);
+            }
+        }
+    }
+    return points;
+}
+
+void TestExactRerankPreservesAnnStage() {
+    map_closures::Config config;
+    config.density_map_resolution = 0.5F;
+    config.density_threshold = 0.05F;
+    config.hamming_distance_threshold = 80;
+
+    map_closures::MapClosures legacy(config);
+    map_closures::MapClosures exact(config);
+    const auto fixture = StructuredClosureFixture();
+
+    for (int query_id = 0; query_id <= 5; ++query_id) {
+        (void)legacy.GetClosures(query_id, fixture);
+        const auto exact_result =
+            exact.GetClosuresExactRerank(query_id, fixture, 10);
+
+        const auto &legacy_query = legacy.GetLastQueryDiagnostics();
+        const auto &exact_query = exact_result.ann_query_diagnostics;
+        Check(
+            legacy_query.query_id == exact_query.query_id &&
+            legacy_query.orb_descriptors == exact_query.orb_descriptors &&
+            legacy_query.retained_descriptors == exact_query.retained_descriptors &&
+            legacy_query.database_references == exact_query.database_references &&
+            legacy_query.retrieved_references == exact_query.retrieved_references &&
+            legacy_query.eligible_references == exact_query.eligible_references &&
+            legacy_query.references_with_enough_matches ==
+                exact_query.references_with_enough_matches &&
+            legacy_query.references_with_enough_inliers ==
+                exact_query.references_with_enough_inliers &&
+            legacy_query.maximum_matches == exact_query.maximum_matches &&
+            legacy_query.best_match_reference_id ==
+                exact_query.best_match_reference_id &&
+            legacy_query.maximum_inliers == exact_query.maximum_inliers &&
+            legacy_query.best_inlier_reference_id ==
+                exact_query.best_inlier_reference_id,
+            "exact reranking must preserve the complete ANN query diagnostics");
+
+        const auto &legacy_refs = legacy.GetLastReferenceDiagnostics();
+        Check(
+            legacy_refs.size() == exact_result.references.size(),
+            "exact reranking must preserve the complete ANN reference population");
+        if (legacy_refs.size() != exact_result.references.size()) {
+            continue;
+        }
+        for (std::size_t index = 0; index < legacy_refs.size(); ++index) {
+            const auto &ann = legacy_refs[index];
+            const auto &reranked = exact_result.references[index];
+            Check(
+                ann.reference_id == reranked.reference_id &&
+                ann.query_id == reranked.query_id &&
+                ann.number_of_matches == reranked.ann_number_of_matches &&
+                ann.number_of_inliers == reranked.ann_number_of_inliers,
+                "exact reranking must preserve each ANN reference result");
+            if (reranked.exact_reranked) {
+                Check(
+                    reranked.number_of_matches >=
+                        reranked.ann_number_of_matches,
+                    "restricted exhaustive matching cannot lose ANN matches");
+            }
+        }
+    }
+}
+
 void TestDescriptorlessQueryClearsStaleMatches() {
     std::vector<Eigen::Vector3d> uniform_grid;
     for (int x = 0; x <= 40; ++x) {
@@ -124,6 +222,7 @@ int main() {
     TestDeterministicWithOutliers();
     TestInsufficientInputIsExplicit();
     TestReferenceDiagnosticsCoverEveryEligibleReference();
+    TestExactRerankPreservesAnnStage();
     TestDescriptorlessQueryClearsStaleMatches();
     if (failures != 0) {
         std::cerr << failures << " assertion(s) failed\n";

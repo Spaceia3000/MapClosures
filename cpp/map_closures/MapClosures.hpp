@@ -77,6 +77,27 @@ struct ReferenceDiagnostics {
     Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
 };
 
+struct ExactRerankReferenceDiagnostics {
+    int reference_id = -1;
+    int query_id = -1;
+    std::size_t ann_number_of_matches = 0;
+    std::size_t ann_number_of_inliers = 0;
+    std::size_t ann_rank = 0;
+    std::size_t number_of_matches = 0;
+    std::size_t number_of_inliers = 0;
+    bool exact_reranked = false;
+    bool has_pose = false;
+    Eigen::Matrix4d pose = Eigen::Matrix4d::Identity();
+};
+
+struct ExactRerankResult {
+    QueryDiagnostics ann_query_diagnostics;
+    QueryDiagnostics final_query_diagnostics;
+    std::size_t exact_reranked_references = 0;
+    std::vector<ExactRerankReferenceDiagnostics> references;
+    std::vector<ClosureCandidate> closures;
+};
+
 class MapClosures {
 public:
     explicit MapClosures();
@@ -98,6 +119,10 @@ public:
                                               const std::vector<Eigen::Vector3d> &local_map) {
         return GetTopKClosures(query_id, local_map, -1);
     }
+    ExactRerankResult GetClosuresExactRerank(
+        const int query_id,
+        const std::vector<Eigen::Vector3d> &local_map,
+        const int exact_rerank_top_k);
 
     const DensityMap &getDensityMapFromId(const int map_id) const {
         return density_maps_.at(map_id);
@@ -123,6 +148,10 @@ protected:
     void MatchAndAddToDatabase(const int id, const std::vector<Eigen::Vector3d> &local_map);
     void Match(const std::vector<Eigen::Vector3d> &local_map);
     ClosureCandidate ValidateClosure(const int reference_id, const int query_id) const;
+    ClosureCandidate ValidateClosure(
+        const int reference_id,
+        const int query_id,
+        const Tree::MatchVectorMap &matches) const;
 
     Config config_;
     QueryDiagnostics last_query_diagnostics_;
